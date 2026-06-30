@@ -24,3 +24,6 @@ dependencies = [
 dev = [
     "pytest>=7.0.0",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["ast_hop"]
