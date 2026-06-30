@@ -20,7 +20,7 @@ CLR_GRAY = "\033[90m"
 CLR_RESET = "\033[0m"
 
 # Beautiful Terminal Banner
-BANNER = f"""
+BANNER = fr"""
 {CLR_CYAN}    ___   _____ ______         __  __           
    /   | / ___//_  __/        / / / /___  ____  
   / /| | \__ \  / /  ______  / /_/ / __ \/ __ \\ 
@@ -100,7 +100,7 @@ def run_interactive_loop(workspace_dir: str, test_cmd: str, model_path: str = No
     
     # Initialize model
     device = torch.device("cpu")
-    vocab_size = 16384
+    vocab_size = 50257
     hidden_dim = 384
     embed_dim = 128
     
@@ -217,16 +217,42 @@ def main():
     if args.task:
         # Run one-shot CLI execution
         print(f"[*] Executing task: {args.task}")
-        # Recycles loop logic for one-shot runs
         compiler = ASTCompiler()
         all_tokens, global_jump_map, py_files = compile_workspace(args.dir, compiler)
         sandbox = CodeSandbox(args.dir)
         
+        # Initialize/load model
         device = torch.device("cpu")
-        model = ASTHop(16384, 128, 384, 2, num_actions=3)
+        vocab_size = 50257  # default vocab size for gpt-2 tokenizer
+        hidden_dim = 384
+        embed_dim = 128
+        
+        # If a checkpoint is provided, load its configuration
         if args.model_path and os.path.exists(args.model_path):
+            print(f"[*] Loading model checkpoint from: {args.model_path}")
             checkpoint = torch.load(args.model_path, map_location=device)
+            # Handle checkpoint mapping
+            vocab_size = checkpoint.get("vocab_size", vocab_size)
+            hidden_dim = checkpoint.get("hidden_dim", hidden_dim)
+            embed_dim = checkpoint.get("embed_dim", embed_dim)
+            
+            model = ASTHop(
+                vocab_size=vocab_size,
+                embed_dim=embed_dim,
+                hidden_dim=hidden_dim,
+                num_classes=2,
+                num_actions=3  # 3 actions: STEP, SKIP, SPAWN
+            )
             model.load_state_dict(checkpoint["model_state_dict"], strict=False)
+        else:
+            print("[*] Initializing fresh local AST-Hop model...")
+            model = ASTHop(
+                vocab_size=vocab_size,
+                embed_dim=embed_dim,
+                hidden_dim=hidden_dim,
+                num_classes=2,
+                num_actions=3
+            )
             
         model.eval()
         agent = RecursiveAgent(model, hidden_dim=384)
