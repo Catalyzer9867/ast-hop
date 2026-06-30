@@ -139,11 +139,12 @@ def run_interactive_loop(workspace_dir: str, test_cmd: str, model_path: str = No
                     break
                 elif cmd == "/help":
                     print(f"\n{CLR_HEADER}Available Interactive Commands:{CLR_RESET}")
-                    print(f"  {CLR_CYAN}/help{CLR_RESET}          - Show this help message")
-                    print(f"  {CLR_CYAN}/files{CLR_RESET}         - List compiled files in target workspace")
-                    print(f"  {CLR_CYAN}/tests{CLR_RESET}         - Execute verification tests in the sandbox")
-                    print(f"  {CLR_CYAN}/skim <task>{CLR_RESET}   - Run a skimming simulation on the workspace")
-                    print(f"  {CLR_CYAN}/exit{CLR_RESET}          - Terminate the chatbot session\n")
+                    print(f"  {CLR_CYAN}/help{CLR_RESET}                       - Show this help message")
+                    print(f"  {CLR_CYAN}/files{CLR_RESET}                      - List compiled files in target workspace")
+                    print(f"  {CLR_CYAN}/tests{CLR_RESET}                      - Execute verification tests in the sandbox")
+                    print(f"  {CLR_CYAN}/skim <task>{CLR_RESET}                - Run a skimming simulation on the workspace")
+                    print(f"  {CLR_CYAN}/write <file> <prompt>{CLR_RESET}     - Generate and write code physically to disk")
+                    print(f"  {CLR_CYAN}/exit{CLR_RESET}                       - Terminate the chatbot session\n")
                 elif cmd == "/files":
                     print(f"\n{CLR_HEADER}Workspace Files Indexed:{CLR_RESET}")
                     for idx, py_file in enumerate(py_files):
@@ -181,8 +182,58 @@ def run_interactive_loop(workspace_dir: str, test_cmd: str, model_path: str = No
                     print(f"  • Token Savings:  {CLR_CYAN}{savings:.2f}%{CLR_RESET} ({reads} read, {len(all_tokens)} total)")
                     print(f"  • Subagent Spawns: {CLR_CYAN}{spawns}{CLR_RESET} parallel scopes initiated")
                     print(f"  • Block Skips:     {CLR_CYAN}{skips}{CLR_RESET} structures skipped completely\n")
+                elif cmd == "/write":
+                    if len(cmd_parts) < 2:
+                        print(f"{CLR_RED}Usage: /write <file_path> <prompt_text>{CLR_RESET}\n")
+                        continue
+                    args_str = cmd_parts[1].split(maxsplit=1)
+                    if len(args_str) < 2:
+                        print(f"{CLR_RED}Usage: /write <file_path> <prompt_text>{CLR_RESET}\n")
+                        continue
+                    file_path = os.path.join(workspace_dir, args_str[0])
+                    prompt_text = args_str[1]
+                    
+                    spinner = TerminalSpinner(f"Generating and writing to {args_str[0]}")
+                    spinner.start()
+                    
+                    # 1. Encode prompt
+                    prompt_tokens = compiler.encoding.encode(prompt_text)
+                    prompt_tensor = torch.tensor(prompt_tokens, dtype=torch.long, device=device)
+                    
+                    # 2. Autoregressively generate code tokens using RecursiveAgent
+                    generated_tensor = agent.execute_generation_pass(
+                        prompt_tokens=prompt_tensor,
+                        max_tokens=150
+                    )
+                    
+                    # 3. Decode generated tokens back into clean text
+                    generated_code = compiler.encoding.decode(generated_tensor.tolist())
+                    
+                    # 4. Write string content directly to target file path on disk
+                    try:
+                        with open(file_path, "w") as f:
+                            f.write(generated_code)
+                        success_write = True
+                    except Exception as e:
+                        success_write = False
+                        write_err = str(e)
+                        
+                    spinner.stop()
+                    
+                    if success_write:
+                        print(f"\n{CLR_GREEN}[+] Successfully created and wrote to {args_str[0]}{CLR_RESET}")
+                        # Auto-trigger sandbox tests to verify correctness
+                        print(f"[*] Running sandbox verification tests...")
+                        success, report = sandbox.execute_test(test_cmd)
+                        if success:
+                            print(f"{CLR_GREEN}✓ Verification Successful: All tests passed on edited file.{CLR_RESET}\n")
+                        else:
+                            print(f"{CLR_RED}✗ Verification Failed. Sandbox traceback output:{CLR_RESET}")
+                            print(f"{CLR_GRAY}{report}{CLR_RESET}\n")
+                    else:
+                        print(f"\n{CLR_RED}[!] Error writing to file: {write_err}{CLR_RESET}\n")
                 else:
-                    print(f"{CLR_RED}Unknown command: {cmd}. Type /help for assistance.{CLR_RESET}")
+                    print(f"{CLR_RED}Unknown command: {cmd}. Type /help for assistance.{CLR_RESET}")e /help for assistance.{CLR_RESET}")
             else:
                 # Default behavior: run recursive subagent code generation pass
                 spinner = TerminalSpinner("Analyzing prompt and generating local tokens")
