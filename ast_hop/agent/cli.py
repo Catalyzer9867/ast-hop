@@ -265,6 +265,7 @@ def run_interactive_loop(workspace_dir: str, test_cmd: str, model_path: str = No
                 
                 # 4. Write string content directly to target file path on disk
                 try:
+                    os.makedirs(os.path.dirname(file_path), exist_ok=True)
                     with open(file_path, "w") as f:
                         f.write(generated_code)
                     success_write = True
