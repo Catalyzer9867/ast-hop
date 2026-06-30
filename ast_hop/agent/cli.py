@@ -233,24 +233,59 @@ def run_interactive_loop(workspace_dir: str, test_cmd: str, model_path: str = No
                     else:
                         print(f"\n{CLR_RED}[!] Error writing to file: {write_err}{CLR_RESET}\n")
                 else:
-                    print(f"{CLR_RED}Unknown command: {cmd}. Type /help for assistance.{CLR_RESET}")e /help for assistance.{CLR_RESET}")
+                    print(f"{CLR_RED}Unknown command: {cmd}. Type /help for assistance.{CLR_RESET}")
             else:
-                # Default behavior: run recursive subagent code generation pass
-                spinner = TerminalSpinner("Analyzing prompt and generating local tokens")
+                # Default behavior: run code generation and write to disk
+                # Check if the first word is a target python file name
+                words = user_input.split(maxsplit=1)
+                if len(words) >= 1 and words[0].endswith(".py"):
+                    target_filename = words[0]
+                    prompt_text = words[1] if len(words) > 1 else target_filename
+                else:
+                    target_filename = "agent_output.py"
+                    prompt_text = user_input
+                    
+                file_path = os.path.join(workspace_dir, target_filename)
+                
+                spinner = TerminalSpinner(f"Generating and writing to {target_filename}")
                 spinner.start()
                 
-                # Mock token generation based on input
-                prompt_tensor = torch.tensor([1, 2, 3], dtype=torch.long, device=device)
+                # 1. Encode prompt
+                prompt_tokens = compiler.encoding.encode(prompt_text)
+                prompt_tensor = torch.tensor(prompt_tokens, dtype=torch.long, device=device)
+                
+                # 2. Autoregressively generate code tokens using RecursiveAgent
                 generated_tensor = agent.execute_generation_pass(
                     prompt_tokens=prompt_tensor,
-                    max_tokens=30
+                    max_tokens=150
                 )
-                time.sleep(0.5)  # slight thought delay
+                
+                # 3. Decode generated tokens back into clean text
+                generated_code = compiler.encoding.decode(generated_tensor.tolist())
+                
+                # 4. Write string content directly to target file path on disk
+                try:
+                    with open(file_path, "w") as f:
+                        f.write(generated_code)
+                    success_write = True
+                except Exception as e:
+                    success_write = False
+                    write_err = str(e)
+                    
                 spinner.stop()
                 
-                print(f"\n{CLR_CYAN}hop-agent (Thought){CLR_RESET}: Initialized root RecursiveAgent.")
-                print(f"  [Parsed]: {user_input}")
-                print(f"  [Output Tokens Generated]: {generated_tensor.tolist()}\n")
+                if success_write:
+                    print(f"\n{CLR_GREEN}[+] Successfully created and wrote to {target_filename}{CLR_RESET}")
+                    # Auto-trigger sandbox tests to verify correctness
+                    print(f"[*] Running sandbox verification tests...")
+                    success, report = sandbox.execute_test(test_cmd)
+                    if success:
+                        print(f"{CLR_GREEN}✓ Verification Successful: All tests passed.{CLR_RESET}\n")
+                    else:
+                        print(f"{CLR_RED}✗ Verification Failed. Sandbox traceback output:{CLR_RESET}")
+                        print(f"{CLR_GRAY}{report}{CLR_RESET}\n")
+                else:
+                    print(f"\n{CLR_RED}[!] Error writing to file: {write_err}{CLR_RESET}\n")
                 
         except (KeyboardInterrupt, EOFError):
             print(f"\n\n{CLR_GRAY}Session interrupted. Goodbye!{CLR_RESET}")
