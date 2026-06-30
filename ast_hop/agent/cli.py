@@ -100,7 +100,7 @@ def run_interactive_loop(workspace_dir: str, test_cmd: str, model_path: str = No
     
     # Initialize model
     device = torch.device("cpu")
-    vocab_size = 50257
+    vocab_size = 100277
     hidden_dim = 384
     embed_dim = 128
     
@@ -223,7 +223,7 @@ def main():
         
         # Initialize/load model
         device = torch.device("cpu")
-        vocab_size = 50257  # default vocab size for gpt-2 tokenizer
+        vocab_size = 100277  # default vocab size for cl100k_base tokenizer
         hidden_dim = 384
         embed_dim = 128
         
