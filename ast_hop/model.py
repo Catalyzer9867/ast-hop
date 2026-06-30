@@ -8,7 +8,8 @@ class ASTHop(nn.Module):
         vocab_size: int,
         embed_dim: int,
         hidden_dim: int,
-        num_classes: int
+        num_classes: int,
+        num_actions: int = 2
     ):
         """
         Args:
@@ -16,16 +17,16 @@ class ASTHop(nn.Module):
             embed_dim: Token embedding dimension.
             hidden_dim: GRU hidden state dimension.
             num_classes: Target classification classes.
+            num_actions: Number of policy actions (e.g. 2 for STEP/SKIP, 3 for STEP/SKIP/SPAWN).
         """
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, embed_dim)
         self.rnn_cell = nn.GRUCell(embed_dim, hidden_dim)
         
-        # Binary policy head: 
-        # Action 0 (STEP): read next sequential token
-        # Action 1 (SKIP): jump directly to end of current block
-        self.policy_head = nn.Linear(hidden_dim, 2)
+        self.policy_head = nn.Linear(hidden_dim, num_actions)
         self.predict_head = nn.Linear(hidden_dim, num_classes)
+        if num_actions > 2:
+            self.generation_head = nn.Linear(hidden_dim, vocab_size)
         self.hidden_dim = hidden_dim
 
     def forward(
@@ -93,6 +94,7 @@ class ASTHop(nn.Module):
                     # Skip block! Jump to end of block
                     t = jump_map[t]
                 else:
+                    # Action 0 (STEP) or Action 2 (SPAWN) - step inside the block
                     t += 1
             else:
                 t += 1
