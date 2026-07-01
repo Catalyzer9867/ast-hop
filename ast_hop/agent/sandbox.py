@@ -19,11 +19,18 @@ class CodeSandbox:
             error_traceback: Structured error output / stdout trace if it failed.
         """
         try:
+            # Prepend local .venv/bin to PATH to use the virtual environment's executables
+            env = os.environ.copy()
+            venv_bin = os.path.join(self.work_dir, ".venv", "bin")
+            if os.path.exists(venv_bin):
+                env["PATH"] = venv_bin + os.pathsep + env.get("PATH", "")
+
             # Run command inside the specified work directory
             result = subprocess.run(
                 test_command,
                 shell=True,
                 cwd=self.work_dir,
+                env=env,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,

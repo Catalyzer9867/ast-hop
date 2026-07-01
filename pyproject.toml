@@ -25,5 +25,8 @@ dev = [
     "pytest>=7.0.0",
 ]
 
+[project.scripts]
+asthop = "ast_hop.agent.cli:main"
+
 [tool.hatch.build.targets.wheel]
 packages = ["ast_hop"]
